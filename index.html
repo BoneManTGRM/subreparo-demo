@@ -1,159 +1,189 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SubReparo Simulation — TGRM vs PID</title>
-<style>
-body {
-  font-family: Arial, sans-serif;
-  background-color: #0a0f18;
-  color: #e0e0e0;
-  text-align: center;
-  margin: 0;
-  padding: 0;
-}
-h1 {
-  color: #00bcd4;
-  margin-top: 20px;
-}
-.container {
-  margin: 20px auto;
-  width: 90%;
-  max-width: 800px;
-  background: #111827;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 0 10px #00bcd4;
-}
-label {
-  display: inline-block;
-  width: 180px;
-  text-align: right;
-  margin-right: 10px;
-}
-input {
-  width: 80px;
-  padding: 4px;
-  background: #0d1117;
-  border: 1px solid #00bcd4;
-  color: #e0e0e0;
-  border-radius: 5px;
-}
-button {
-  background: #00bcd4;
-  color: #111;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  margin-top: 10px;
-}
-button:hover {
-  background: #0097a7;
-}
-canvas {
-  margin-top: 20px;
-  background: #000;
-  border: 1px solid #00bcd4;
-}
-.stats {
-  text-align: left;
-  margin-top: 20px;
-  font-size: 14px;
-  line-height: 1.6;
-}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SubReparo Simulation — TGRM vs PID</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { background:#0f172a; color:#e5e7eb; }
+    .panel { background:#0b1224; border-radius:16px; box-shadow:0 0 0 2px rgba(0,255,255,.08), 0 20px 40px rgba(0,0,0,.35); }
+    .neon { box-shadow:0 0 0 2px rgba(34,211,238,.15), 0 0 30px rgba(34,211,238,.12) inset; border-radius:14px; }
+    input { background:#0f1a33; border:1px solid #123; border-radius:8px; padding:.5rem .6rem; width:100%; }
+  </style>
 </head>
-<body>
+<body class="min-h-screen">
+  <div class="max-w-5xl mx-auto p-4 md:p-8 space-y-6">
+    <header class="text-center">
+      <h1 class="text-3xl md:text-5xl font-extrabold text-cyan-400 drop-shadow">SubReparo Simulation</h1>
+      <p class="text-sm md:text-base text-slate-300 mt-2">
+        Targeted Gradient Repair Mechanism (TGRM) vs PID Control<br>
+        <span class="opacity-70">Part of the Reparodynamics Open-Science Framework</span>
+      </p>
+    </header>
 
-<h1>SubReparo Simulation</h1>
-<p>Targeted Gradient Repair Mechanism (TGRM) vs PID Control<br>Part of the Reparodynamics Open-Science Framework</p>
+    <section class="panel neon p-4 md:p-6">
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div><label class="text-xs">Initial Drift</label><input id="initialDrift" value="1.2" type="number" step="0.1"></div>
+        <div><label class="text-xs">Simulation Steps</label><input id="steps" value="12000" type="number" step="100"></div>
+        <div><label class="text-xs">PID Gain</label><input id="pidGain" value="0.22" type="number" step="0.01"></div>
+        <div><label class="text-xs">TGRM Gain</label><input id="tgrmGain" value="0.28" type="number" step="0.01"></div>
+        <div><label class="text-xs">TGRM Threshold (τ)</label><input id="tgrmTau" value="0.12" type="number" step="0.01"></div>
+        <div><label class="text-xs">TGRM Max Correction (Emax)</label><input id="tgrmEmax" value="0.60" type="number" step="0.01"></div>
+      </div>
+      <div class="mt-4">
+        <button id="run" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded font-semibold">Run Simulation</button>
+      </div>
+    </section>
 
-<div class="container">
-  <div>
-    <label>Initial Drift:</label><input id="drift" value="1.2"><br>
-    <label>Simulation Steps:</label><input id="steps" value="1200"><br>
-    <label>PID Gain:</label><input id="pidGain" value="0.14"><br>
-    <label>TGRM Gain:</label><input id="tgrmGain" value="0.35"><br>
-    <label>TGRM Threshold (τ):</label><input id="tgrmTau" value="0.08"><br>
-    <label>TGRM Max Correction (Emax):</label><input id="tgrmEmax" value="0.8"><br>
-    <button onclick="runSimulation()">Run Simulation</button>
+    <section class="panel p-4 md:p-6">
+      <canvas id="chart" height="240"></canvas>
+      <p class="mt-2 text-xs text-slate-400">PID (cyan) vs TGRM (pink)</p>
+    </section>
+
+    <section class="grid md:grid-cols-2 gap-4">
+      <div class="panel p-4">
+        <h3 class="text-lg font-semibold text-cyan-300">PID Controller</h3>
+        <div class="mt-2 space-y-1 text-sm">
+          <div>Avg Error: <span id="pid_err" class="font-mono">-</span></div>
+          <div>Energy Σ|u|: <span id="pid_energy" class="font-mono">-</span></div>
+        </div>
+      </div>
+      <div class="panel p-4">
+        <h3 class="text-lg font-semibold text-pink-300">TGRM (SubReparo)</h3>
+        <div class="mt-2 space-y-1 text-sm">
+          <div>Avg Error: <span id="t_err" class="font-mono">-</span></div>
+          <div>REPS (Repair Events): <span id="t_reps" class="font-mono">-</span></div>
+          <div>Energy Σ|u|: <span id="t_energy" class="font-mono">-</span></div>
+        </div>
+      </div>
+    </section>
   </div>
-  <canvas id="chart" width="700" height="300"></canvas>
 
-  <div class="stats" id="stats"></div>
-</div>
+  <script>
+    // ---------- helpers ----------
+    function clamp(v, lo, hi){ return Math.min(Math.max(v, lo), hi); }
 
-<script>
-function runSimulation() {
-  const steps = parseInt(document.getElementById('steps').value);
-  const drift = parseFloat(document.getElementById('drift').value);
-  const pidGain = parseFloat(document.getElementById('pidGain').value);
-  const tgrmGain = parseFloat(document.getElementById('tgrmGain').value);
-  const tau = parseFloat(document.getElementById('tgrmTau').value);
-  const emax = parseFloat(document.getElementById('tgrmEmax').value);
-
-  let pid = 0, tgrm = 0, trueVal = 0;
-  let pidErr = [], tgrmErr = [];
-  let pidEnergy = 0, tgrmEnergy = 0, reps = 0;
-
-  for (let i = 0; i < steps; i++) {
-    trueVal += drift * (Math.random() - 0.5);
-    let errPID = trueVal - pid;
-    pid += pidGain * errPID;
-    pidEnergy += Math.abs(pidGain * errPID);
-    pidErr.push(errPID);
-
-    let errTGRM = trueVal - tgrm;
-    if (Math.abs(errTGRM) > tau) {
-      let correction = tgrmGain * errTGRM;
-      correction = Math.max(-emax, Math.min(emax, correction));
-      tgrm += correction;
-      tgrmEnergy += Math.abs(correction);
-      reps++;
+    // Bursty hazard: small noise + spike clusters + slow drift
+    function makeHazardGenerator(cfg = {}) {
+      const {
+        baseNoise=0.04,   // small noise
+        burstAmp=1.5,     // spike height
+        burstProb=0.02,   // chance to start cluster
+        clusterLen=40,    // spikes per cluster
+        driftSlope=0.00035
+      } = cfg;
+      let burstLeft = 0, drift = 0;
+      return () => {
+        if (burstLeft<=0 && Math.random()<burstProb) burstLeft = clusterLen;
+        if (burstLeft>0) burstLeft--;
+        drift += (Math.random() - 0.5) * driftSlope * 2;
+        const noise = (Math.random() - 0.5) * 2 * baseNoise;
+        const spike = (burstLeft>0) ? (Math.random()<0.5 ? -burstAmp : burstAmp) : 0;
+        return noise + spike + drift;
+      };
     }
-    tgrmErr.push(errTGRM);
-  }
 
-  let avgPID = pidErr.reduce((a,b)=>a+Math.abs(b),0)/steps;
-  let avgTGRM = tgrmErr.reduce((a,b)=>a+Math.abs(b),0)/steps;
+    // Create one hazard sequence so both controllers face the exact same disturbance
+    function makeHazardArray(steps, generator){
+      const arr = new Array(steps);
+      for (let i=0;i<steps;i++) arr[i] = generator();
+      return arr;
+    }
 
-  drawChart(pidErr, tgrmErr);
-  document.getElementById('stats').innerHTML = `
-  <b>PID Controller</b><br>
-  Avg Error: ${avgPID.toFixed(3)}<br>
-  Energy Σ|u|: ${pidEnergy.toFixed(3)}<br><br>
-  <b>TGRM (SubReparo)</b><br>
-  Avg Error: ${avgTGRM.toFixed(3)}<br>
-  REPS (Repair Events): ${reps}<br>
-  Energy Σ|u|: ${tgrmEnergy.toFixed(3)}<br>
-  `;
-}
+    // PID with energy tracking
+    function simulate_pid(drift, gain, steps, hazardArr){
+      const history = [];
+      let err_sum = 0, energy = 0;
+      for (let i=0;i<steps;i++){
+        drift += hazardArr[i];
+        history.push(drift);
+        const u = -gain * drift; // proportional only to keep simple
+        drift += u;
+        energy += Math.abs(u);
+        err_sum += Math.abs(drift);
+      }
+      return { history, avg_err: err_sum/steps, energy, time_ms: 0 };
+    }
 
-function drawChart(pidErr, tgrmErr) {
-  const ctx = document.getElementById('chart').getContext('2d');
-  ctx.clearRect(0, 0, 700, 300);
-  ctx.beginPath();
-  ctx.strokeStyle = '#00bcd4';
-  for (let i = 0; i < pidErr.length; i++) {
-    let y = 150 - pidErr[i] * 20;
-    ctx.lineTo(i / pidErr.length * 700, y);
-  }
-  ctx.stroke();
+    // TGRM: thresholded, bounded correction + cooldown to prevent chatter
+    function simulate_tgrm(drift, gain, tau, emax, steps, hazardArr, cooldownSteps=3){
+      const history = [];
+      let err_sum = 0, energy = 0, reps = 0, cd = 0;
+      for (let i=0;i<steps;i++){
+        drift += hazardArr[i];
+        history.push(drift);
 
-  ctx.beginPath();
-  ctx.strokeStyle = '#ff4081';
-  for (let i = 0; i < tgrmErr.length; i++) {
-    let y = 150 - tgrmErr[i] * 20;
-    ctx.lineTo(i / tgrmErr.length * 700, y);
-  }
-  ctx.stroke();
+        if (cd===0 && Math.abs(drift) > tau){
+          const excess = Math.abs(drift) - tau;           // only push back what exceeds τ
+          const bounded = clamp(excess, 0, emax);
+          const u = Math.sign(drift) * bounded * gain;    // push against drift
+          drift -= u;
+          energy += Math.abs(u);
+          reps += 1;
+          cd = cooldownSteps;                              // hysteresis/cooldown
+        } else if (cd>0) {
+          cd -= 1;
+        }
+        err_sum += Math.abs(drift);
+      }
+      return { history, avg_err: err_sum/steps, energy, reps, time_ms: 0 };
+    }
 
-  ctx.fillStyle = '#ccc';
-  ctx.fillText('PID (cyan) vs TGRM (pink)', 10, 290);
-}
-</script>
+    // ---------- chart ----------
+    const ctx = document.getElementById('chart').getContext('2d');
+    let chart = new Chart(ctx, {
+      type:'line',
+      data:{ labels:[], datasets:[
+        {label:'PID', data:[], borderColor:'rgba(34,211,238,1)', backgroundColor:'rgba(34,211,238,.12)', borderWidth:2, pointRadius:0, tension:.25},
+        {label:'TGRM', data:[], borderColor:'rgba(244,114,182,1)', backgroundColor:'rgba(244,114,182,.12)', borderWidth:2, pointRadius:0, tension:.25},
+      ]},
+      options:{
+        animation:false,
+        responsive:true,
+        scales:{
+          x:{ ticks:{color:'#94a3b8'}, grid:{color:'rgba(148,163,184,.08)'} },
+          y:{ ticks:{color:'#94a3b8'}, grid:{color:'rgba(148,163,184,.08)'} }
+        },
+        plugins:{ legend:{ labels:{ color:'#cbd5e1' } } }
+      }
+    });
 
+    // ---------- UI wiring ----------
+    const el = id => document.getElementById(id);
+    const outs = {
+      pid_err: el('pid_err'), pid_energy: el('pid_energy'),
+      t_err: el('t_err'), t_energy: el('t_energy'), t_reps: el('t_reps')
+    };
+
+    el('run').addEventListener('click', () => {
+      const initialDrift = parseFloat(el('initialDrift').value);
+      const steps = parseInt(el('steps').value, 10);
+      const pidGain = parseFloat(el('pidGain').value);
+      const tGain = parseFloat(el('tgrmGain').value);
+      const tau = parseFloat(el('tgrmTau').value);
+      const emax = parseFloat(el('tgrmEmax').value);
+
+      // Same hazards for both
+      const hz = makeHazardArray(steps, makeHazardGenerator());
+
+      const pid = simulate_pid(initialDrift, pidGain, steps, hz);
+      const tgrm = simulate_tgrm(initialDrift, tGain, tau, emax, steps, hz);
+
+      // Update numbers
+      outs.pid_err.textContent = pid.avg_err.toFixed(3);
+      outs.pid_energy.textContent = pid.energy.toFixed(3);
+      outs.t_err.textContent = tgrm.avg_err.toFixed(3);
+      outs.t_energy.textContent = tgrm.energy.toFixed(3);
+      outs.t_reps.textContent = tgrm.reps.toString();
+
+      // Update chart
+      chart.data.labels = Array.from({length:steps}, (_,i)=>i+1);
+      chart.data.datasets[0].data = pid.history;
+      chart.data.datasets[1].data = tgrm.history;
+      chart.update();
+    });
+  </script>
 </body>
 </html>
