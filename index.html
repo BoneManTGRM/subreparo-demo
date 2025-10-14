@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubReparo Simulation — TGRM vs PID</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background-color: #0a0f18;
+  color: #e0e0e0;
+  text-align: center;
+  margin: 0;
+  padding: 0;
+}
+h1 {
+  color: #00bcd4;
+  margin-top: 20px;
+}
+.container {
+  margin: 20px auto;
+  width: 90%;
+  max-width: 800px;
+  background: #111827;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px #00bcd4;
+}
+label {
+  display: inline-block;
+  width: 180px;
+  text-align: right;
+  margin-right: 10px;
+}
+input {
+  width: 80px;
+  padding: 4px;
+  background: #0d1117;
+  border: 1px solid #00bcd4;
+  color: #e0e0e0;
+  border-radius: 5px;
+}
+button {
+  background: #00bcd4;
+  color: #111;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+button:hover {
+  background: #0097a7;
+}
+canvas {
+  margin-top: 20px;
+  background: #000;
+  border: 1px solid #00bcd4;
+}
+.stats {
+  text-align: left;
+  margin-top: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+</style>
+</head>
+<body>
+
+<h1>SubReparo Simulation</h1>
+<p>Targeted Gradient Repair Mechanism (TGRM) vs PID Control<br>Part of the Reparodynamics Open-Science Framework</p>
+
+<div class="container">
+  <div>
+    <label>Initial Drift:</label><input id="drift" value="1.2"><br>
+    <label>Simulation Steps:</label><input id="steps" value="1200"><br>
+    <label>PID Gain:</label><input id="pidGain" value="0.14"><br>
+    <label>TGRM Gain:</label><input id="tgrmGain" value="0.35"><br>
+    <label>TGRM Threshold (τ):</label><input id="tgrmTau" value="0.08"><br>
+    <label>TGRM Max Correction (Emax):</label><input id="tgrmEmax" value="0.8"><br>
+    <button onclick="runSimulation()">Run Simulation</button>
+  </div>
+  <canvas id="chart" width="700" height="300"></canvas>
+
+  <div class="stats" id="stats"></div>
+</div>
+
+<script>
+function runSimulation() {
+  const steps = parseInt(document.getElementById('steps').value);
+  const drift = parseFloat(document.getElementById('drift').value);
+  const pidGain = parseFloat(document.getElementById('pidGain').value);
+  const tgrmGain = parseFloat(document.getElementById('tgrmGain').value);
+  const tau = parseFloat(document.getElementById('tgrmTau').value);
+  const emax = parseFloat(document.getElementById('tgrmEmax').value);
+
+  let pid = 0, tgrm = 0, trueVal = 0;
+  let pidErr = [], tgrmErr = [];
+  let pidEnergy = 0, tgrmEnergy = 0, reps = 0;
+
+  for (let i = 0; i < steps; i++) {
+    trueVal += drift * (Math.random() - 0.5);
+    let errPID = trueVal - pid;
+    pid += pidGain * errPID;
+    pidEnergy += Math.abs(pidGain * errPID);
+    pidErr.push(errPID);
+
+    let errTGRM = trueVal - tgrm;
+    if (Math.abs(errTGRM) > tau) {
+      let correction = tgrmGain * errTGRM;
+      correction = Math.max(-emax, Math.min(emax, correction));
+      tgrm += correction;
+      tgrmEnergy += Math.abs(correction);
+      reps++;
+    }
+    tgrmErr.push(errTGRM);
+  }
+
+  let avgPID = pidErr.reduce((a,b)=>a+Math.abs(b),0)/steps;
+  let avgTGRM = tgrmErr.reduce((a,b)=>a+Math.abs(b),0)/steps;
+
+  drawChart(pidErr, tgrmErr);
+  document.getElementById('stats').innerHTML = `
+  <b>PID Controller</b><br>
+  Avg Error: ${avgPID.toFixed(3)}<br>
+  Energy Σ|u|: ${pidEnergy.toFixed(3)}<br><br>
+  <b>TGRM (SubReparo)</b><br>
+  Avg Error: ${avgTGRM.toFixed(3)}<br>
+  REPS (Repair Events): ${reps}<br>
+  Energy Σ|u|: ${tgrmEnergy.toFixed(3)}<br>
+  `;
+}
+
+function drawChart(pidErr, tgrmErr) {
+  const ctx = document.getElementById('chart').getContext('2d');
+  ctx.clearRect(0, 0, 700, 300);
+  ctx.beginPath();
+  ctx.strokeStyle = '#00bcd4';
+  for (let i = 0; i < pidErr.length; i++) {
+    let y = 150 - pidErr[i] * 20;
+    ctx.lineTo(i / pidErr.length * 700, y);
+  }
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.strokeStyle = '#ff4081';
+  for (let i = 0; i < tgrmErr.length; i++) {
+    let y = 150 - tgrmErr[i] * 20;
+    ctx.lineTo(i / tgrmErr.length * 700, y);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = '#ccc';
+  ctx.fillText('PID (cyan) vs TGRM (pink)', 10, 290);
+}
+</script>
+
+</body>
+</html>
