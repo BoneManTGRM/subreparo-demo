@@ -1,0 +1,39 @@
+name: SubReparo Immune CI
+
+on:
+  pull_request:
+    paths:
+      - "immune/**"
+      - ".github/workflows/immune-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "immune/**"
+      - ".github/workflows/immune-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: immune
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+
+      - name: Run tests
+        run: pytest
+
+      - name: Run scanner smoke test
+        run: python -m subreparo_immune.cli scan . --json
