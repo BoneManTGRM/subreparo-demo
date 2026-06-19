@@ -21,6 +21,11 @@ class FractureType(str, Enum):
     SENSITIVE_FILE = "sensitive_file"
     SUSPICIOUS_FILE = "suspicious_file"
     CONFIG_RISK = "config_risk"
+    BASELINE_MISSING = "baseline_missing"
+    FILE_CHANGED = "file_changed"
+    FILE_ADDED = "file_added"
+    FILE_REMOVED = "file_removed"
+    WEBSITE_HEALTH = "website_health"
 
 
 @dataclass(frozen=True)
